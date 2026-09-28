@@ -92,11 +92,14 @@ END;
 -- Say what was built, broken down, so a seed that quietly loses a slice shows
 -- up here rather than three scripts later as a mystery.
 DECLARE
+    -- Variables first: PL/SQL will not accept a declaration after a nested
+    -- subprogram.
+    v_n NUMBER;
+
     PROCEDURE say(p_label IN VARCHAR2, p_count IN NUMBER) IS
     BEGIN
         DBMS_OUTPUT.PUT_LINE(RPAD(p_label, 34) || LPAD(p_count, 8));
     END;
-    v_n NUMBER;
 BEGIN
     SELECT COUNT(*) INTO v_n FROM ledger_entry;
     say('ledger entries', v_n);
