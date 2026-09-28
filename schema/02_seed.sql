@@ -4,10 +4,9 @@
 -- including the awkward ones. The numbers are deterministic, not random, so
 -- the assertion script compares two runs over identical data.
 --
--- Change &&rows to make the timing script interesting. 200000 is roughly a
--- night's inward volume for a mid-sized clearing member.
-
-DEFINE rows = 200000
+-- The caller decides how many rows: run_all.sql asks for 200000, roughly a
+-- night's inward volume for a mid-sized clearing member, and test/ci.sql asks
+-- for fewer so a build does not sit waiting on the row-by-row loop.
 
 SET SERVEROUTPUT ON
 
@@ -46,6 +45,10 @@ SELECT 1,
        DATE '2026-06-20'
   FROM ledger_entry l
  WHERE MOD(l.ledger_id, 313) <> 0;        -- every 313th cheque is not in the file at all
+
+-- A direct path insert locks the table against the session that made it, so
+-- the ordinary inserts below need this commit first or they raise ORA-12838.
+COMMIT;
 
 -- Cheques the file presents that the ledger has never heard of.
 INSERT INTO recon_staging (batch_id, line_no, cheque_no, account_no, ifsc, amount, issue_date)

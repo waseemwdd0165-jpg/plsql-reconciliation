@@ -5,10 +5,20 @@
 -- reconciliation procedures write into RECON_RESULT, and the point of the
 -- repository is that they write exactly the same thing.
 
-DROP TABLE recon_result_err PURGE;
-DROP TABLE recon_result     PURGE;
-DROP TABLE ledger_entry     PURGE;
-DROP TABLE recon_staging    PURGE;
+-- Idempotent, so this runs on an empty database as happily as on one that
+-- already holds a previous run. A bare DROP of a table that is not there
+-- raises ORA-00942 and takes the whole script down with it.
+BEGIN
+    FOR t IN (SELECT table_name
+                FROM user_tables
+               WHERE table_name IN ('RECON_RESULT_ERR', 'RECON_RESULT',
+                                    'LEDGER_ENTRY', 'RECON_STAGING'))
+    LOOP
+        EXECUTE IMMEDIATE 'DROP TABLE ' || t.table_name
+                          || ' CASCADE CONSTRAINTS PURGE';
+    END LOOP;
+END;
+/
 
 CREATE TABLE recon_staging (
     batch_id     NUMBER(10)    NOT NULL,
