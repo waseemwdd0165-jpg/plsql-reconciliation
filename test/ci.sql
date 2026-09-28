@@ -4,6 +4,9 @@
 -- sit waiting on the row-by-row loop, and with the session set to abandon the
 -- run on the first Oracle error rather than carry on and report success.
 --
+-- Run it from the repository root, because the paths below are relative to
+-- the working directory rather than to this file:
+--
 --   sqlplus -S -L user/password@host/service @test/ci.sql
 --
 -- Twenty thousand rows is still enough for the seed to produce all six
@@ -22,16 +25,16 @@ DEFINE rows = 20000
 
 PROMPT
 PROMPT == schema ==============================================================
-@@../schema/01_tables.sql
+@schema/01_tables.sql
 
 PROMPT
 PROMPT == data ================================================================
-@@../schema/02_seed.sql
+@schema/02_seed.sql
 
 PROMPT
 PROMPT == package =============================================================
-@@../src/pkg_recon.pks
-@@../src/pkg_recon.pkb
+@src/pkg_recon.pks
+@src/pkg_recon.pkb
 
 -- CREATE PACKAGE succeeds even when the body does not compile: SQL*Plus prints
 -- a warning and carries on. A build that only checks for SQL errors would call
@@ -57,13 +60,13 @@ END;
 
 PROMPT
 PROMPT == are the two runs the same? ==========================================
-@@assert_equivalent.sql
+@test/assert_equivalent.sql
 
 PROMPT
 PROMPT == does the timing harness run? ========================================
 PROMPT (the numbers below are from a shared build machine over a small ledger,
 PROMPT  so they say nothing useful about either version. Run it yourself.)
-@@timing.sql
+@test/timing.sql
 
 PROMPT
 PROMPT done.
