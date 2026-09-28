@@ -1,5 +1,7 @@
 # plsql-reconciliation
 
+[![run against Oracle](https://github.com/waseemwdd0165-jpg/plsql-reconciliation/actions/workflows/ci.yml/badge.svg)](https://github.com/waseemwdd0165-jpg/plsql-reconciliation/actions/workflows/ci.yml)
+
 A nightly clearing reconciliation written twice: the row-by-row loop it used to
 be, and the set-based statement it became, with a script that proves the two
 decide every line the same way.
@@ -8,16 +10,21 @@ decide every line the same way.
 sqlplus user/password@db @run_all.sql
 ```
 
-## Honest note first
+## What is checked, and what is not
 
-I do not have an Oracle instance any more, so **these scripts are written out
-from the work but have not been run as they stand**, and there are no timings
-in this README for the same reason. `test/timing.sql` prints its own and tells
-you to fill in your numbers rather than quote mine. If something here does not
-compile on your database, that is on me and I would like to know.
+Every push starts an Oracle Database Free container, builds the schema, seeds
+it, compiles the package and runs the equivalence assertion. So the badge above
+answers the questions that matter: does this compile, and do the two
+reconciliations decide every line identically. It would go red the moment they
+did not.
 
-Everything below is a claim about the code you can read, not about a run you
-cannot see.
+There are still **no timings in this README**, and that is deliberate. A number
+measured on a shared build machine over a small ledger says nothing about your
+database. `test/timing.sql` prints its own and tells you to fill in yours.
+
+CI runs the same scripts as `run_all.sql` over 20,000 rows rather than 200,000,
+which is small enough to keep a build short and still large enough for the seed
+to produce all six verdicts. The assertion refuses to pass unless it does.
 
 ## The job
 
@@ -74,7 +81,8 @@ out of everybody else's window.
 ## Proving they agree
 
 `test/assert_equivalent.sql` runs both over the same batch and fails on the
-first disagreement. It checks:
+first disagreement. This is the only reason it is safe to delete the loop: not
+that the new one is faster, but that it decides the same thing. It checks:
 
 - nothing was diverted to the error log
 - both wrote the same number of lines
@@ -85,10 +93,14 @@ first disagreement. It checks:
 That last check is the one people leave out. An equivalence test over data that
 never produces `ALREADY_CLEARED` has not tested `ALREADY_CLEARED`.
 
-The seed builds a 200,000 entry ledger and a file that hits all six: every 313th
-cheque withheld, every 97th presented one paisa out, every 40th already cleared
-in the ledger, 200 cheques the ledger has never seen, a slice presented twice,
-and fifty rows the ETL could not fill in.
+The seed builds a ledger and a file that hits all six: every 313th cheque
+withheld, every 97th presented one paisa out, every 40th already cleared in the
+ledger, 200 cheques the ledger has never seen, a slice presented twice, and
+fifty rows the ETL could not fill in.
+
+CI also refuses a package that compiles with warnings. `CREATE PACKAGE BODY`
+succeeds even when the body is broken, so a build that only watches for SQL
+errors would call that a pass; `test/ci.sql` asks `user_errors` instead.
 
 ## Layout
 
@@ -99,6 +111,8 @@ schema/02_seed.sql           200,000 entries and a file with every problem in it
 src/pkg_recon.pks/.pkb       both procedures, same contract
 test/assert_equivalent.sql   the two runs must decide identically
 test/timing.sql              three runs each, median reported
+test/ci.sql                  what the build runs, on a smaller ledger
+.github/workflows/ci.yml     starts Oracle in a container and runs it
 ```
 
 Needs Oracle 12c or later: `FETCH FIRST`, and `DBMS_ERRLOG` for the error log
