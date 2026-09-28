@@ -17,7 +17,7 @@ TRUNCATE TABLE recon_staging;
 
 -- The ledger. One entry per cheque. Every fortieth one is already cleared,
 -- which is the case that has to be caught rather than matched again.
-INSERT /*+ APPEND */ INTO ledger_entry
+INSERT INTO ledger_entry
     (ledger_id, ifsc, account_no, cheque_no, amount, cleared_flag, cleared_on)
 SELECT level,
        'HDFC000' || LPAD(MOD(level, 900) + 100, 4, '0'),
@@ -33,7 +33,7 @@ COMMIT;
 
 -- The inward file for batch 1. It is the ledger, minus a slice, plus the
 -- problems that turn up in a real file.
-INSERT /*+ APPEND */ INTO recon_staging
+INSERT INTO recon_staging
     (batch_id, line_no, cheque_no, account_no, ifsc, amount, issue_date)
 SELECT 1,
        l.ledger_id,
@@ -45,10 +45,6 @@ SELECT 1,
        DATE '2026-06-20'
   FROM ledger_entry l
  WHERE MOD(l.ledger_id, 313) <> 0;        -- every 313th cheque is not in the file at all
-
--- A direct path insert locks the table against the session that made it, so
--- the ordinary inserts below need this commit first or they raise ORA-12838.
-COMMIT;
 
 -- Cheques the file presents that the ledger has never heard of.
 INSERT INTO recon_staging (batch_id, line_no, cheque_no, account_no, ifsc, amount, issue_date)
@@ -93,13 +89,37 @@ BEGIN
 END;
 /
 
+-- Say what was built, broken down, so a seed that quietly loses a slice shows
+-- up here rather than three scripts later as a mystery.
 DECLARE
-    v_ledger  NUMBER;
-    v_file    NUMBER;
+    PROCEDURE say(p_label IN VARCHAR2, p_count IN NUMBER) IS
+    BEGIN
+        DBMS_OUTPUT.PUT_LINE(RPAD(p_label, 34) || LPAD(p_count, 8));
+    END;
+    v_n NUMBER;
 BEGIN
-    SELECT COUNT(*) INTO v_ledger FROM ledger_entry;
-    SELECT COUNT(*) INTO v_file   FROM recon_staging WHERE batch_id = 1;
-    DBMS_OUTPUT.PUT_LINE('ledger  ' || v_ledger || ' entries');
-    DBMS_OUTPUT.PUT_LINE('file    ' || v_file   || ' lines');
+    SELECT COUNT(*) INTO v_n FROM ledger_entry;
+    say('ledger entries', v_n);
+
+    SELECT COUNT(*) INTO v_n FROM recon_staging WHERE batch_id = 1;
+    say('file lines, total', v_n);
+
+    SELECT COUNT(*) INTO v_n FROM recon_staging WHERE batch_id = 1 AND line_no < 1000000;
+    say('  presented from the ledger', v_n);
+
+    SELECT COUNT(*) INTO v_n FROM recon_staging
+     WHERE batch_id = 1 AND line_no BETWEEN 1000000 AND 1999999;
+    say('  not in the ledger at all', v_n);
+
+    SELECT COUNT(*) INTO v_n FROM recon_staging
+     WHERE batch_id = 1 AND line_no BETWEEN 2000000 AND 2999999;
+    say('  presented a second time', v_n);
+
+    SELECT COUNT(*) INTO v_n FROM recon_staging WHERE batch_id = 1 AND line_no >= 3000000;
+    say('  incomplete rows', v_n);
+
+    SELECT COUNT(*) INTO v_n FROM recon_staging s
+     WHERE s.batch_id = 1 AND MOD(s.line_no, 97) = 0 AND s.line_no < 1000000;
+    say('  of those, wrong amount', v_n);
 END;
 /
