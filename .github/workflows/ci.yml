@@ -39,6 +39,8 @@ jobs:
       - name: Build the schema, run both reconciliations, compare them
         run: |
           docker cp . oracle:/work
+          # docker cp lands the files as root; the database runs as oracle.
+          docker exec -u root oracle chmod -R a+rX /work
           docker exec oracle bash -c \
             'cd /work && sqlplus -S -L system/ci_only_not_a_secret@localhost/FREEPDB1 @test/ci.sql'
 
