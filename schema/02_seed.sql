@@ -32,7 +32,13 @@ CONNECT BY level <= &&rows;
 COMMIT;
 
 -- The inward file for batch 1. It is the ledger, minus a slice, plus the
--- problems that turn up in a real file.
+-- problems that turn up in a real file: every 97th line is presented for the
+-- wrong amount, and every 313th cheque is not in the file at all.
+--
+-- Keep the comments out here. A comment on its own line inside the statement
+-- got SQL*Plus to run it as an insert of no rows, silently, and the first sign
+-- of it was the equivalence assertion complaining three scripts later that the
+-- seed had never produced an AMOUNT_MISMATCH.
 INSERT INTO recon_staging
     (batch_id, line_no, cheque_no, account_no, ifsc, amount, issue_date)
 SELECT 1,
@@ -40,11 +46,10 @@ SELECT 1,
        l.cheque_no,
        l.account_no,
        l.ifsc,
-       -- every 97th line is presented for the wrong amount
        CASE WHEN MOD(l.ledger_id, 97) = 0 THEN l.amount + 0.01 ELSE l.amount END,
        DATE '2026-06-20'
   FROM ledger_entry l
- WHERE MOD(l.ledger_id, 313) <> 0;        -- every 313th cheque is not in the file at all
+ WHERE MOD(l.ledger_id, 313) <> 0;
 
 -- Cheques the file presents that the ledger has never heard of.
 INSERT INTO recon_staging (batch_id, line_no, cheque_no, account_no, ifsc, amount, issue_date)
