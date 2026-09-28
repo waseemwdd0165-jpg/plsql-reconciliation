@@ -16,7 +16,9 @@ WHENEVER SQLERROR EXIT FAILURE
 WHENEVER OSERROR EXIT FAILURE
 
 SET ECHO OFF
-SET FEEDBACK OFF
+-- Leave feedback on: 'N rows created' after each statement is how a seed
+-- that silently inserts nothing gets noticed.
+SET FEEDBACK ON
 SET LINESIZE 200
 SET PAGESIZE 100
 SET SERVEROUTPUT ON SIZE UNLIMITED
