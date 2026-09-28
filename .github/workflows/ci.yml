@@ -1,0 +1,54 @@
+name: run against Oracle
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    name: Oracle Database Free
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start a database
+        run: |
+          docker run -d --name oracle \
+            -e ORACLE_PASSWORD=ci_only_not_a_secret \
+            gvenzl/oracle-free:slim-faststart
+
+          echo "waiting for it to come up"
+          for i in $(seq 1 90); do
+            if docker exec oracle healthcheck.sh >/dev/null 2>&1; then
+              echo "ready after about $((i * 5)) seconds"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "::error::the database never became healthy"
+          docker logs oracle | tail -80
+          exit 1
+
+      # Everything the repository claims, checked by the database itself:
+      # the schema builds, the package compiles clean, and the two
+      # reconciliations decide every line the same way.
+      - name: Build the schema, run both reconciliations, compare them
+        run: |
+          docker cp . oracle:/work
+          docker exec oracle bash -c \
+            'cd /work && sqlplus -S -L system/ci_only_not_a_secret@localhost/FREEPDB1 @test/ci.sql'
+
+      - name: What the database was
+        if: always()
+        run: |
+          docker exec oracle bash -c \
+            'sqlplus -S -L system/ci_only_not_a_secret@localhost/FREEPDB1 <<< "SELECT banner_full FROM v\$version; EXIT"' \
+            || true
+
+      - name: Database log, if something went wrong
+        if: failure()
+        run: docker logs oracle | tail -120
